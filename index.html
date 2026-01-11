@@ -22,6 +22,27 @@
         width: 100vw;
         height: 100vh;
         position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #game-box {
+        width: 600px;
+        height: 600px;
+        background: rgba(20, 20, 30, 0.9);
+        border-radius: 30px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+      }
+
+      #game-box canvas {
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 30px;
       }
 
       #overlay {
@@ -37,9 +58,8 @@
       #ui-panel {
         position: absolute;
         top: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        text-align: center;
+        right: 30px;
+        text-align: right;
         pointer-events: none;
       }
 
@@ -52,12 +72,12 @@
       }
 
       #reaction-time {
-        font-size: 56px;
+        font-size: 48px;
         font-weight: 700;
         color: #00ff88;
         text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
-        margin: 20px 0;
-        min-height: 70px;
+        margin: 15px 0;
+        min-height: 60px;
       }
 
       #stats {
@@ -91,8 +111,27 @@
         left: 50%;
         transform: translateX(-50%);
         display: flex;
+        flex-direction: column;
+        align-items: center;
         gap: 20px;
         pointer-events: all;
+      }
+
+      #button-row {
+        display: flex;
+        gap: 20px;
+      }
+
+      #instructions-text {
+        text-align: center;
+        color: #aaa;
+        font-size: 14px;
+        line-height: 1.6;
+        max-width: 400px;
+      }
+
+      #instructions-text strong {
+        color: #00ff88;
       }
 
       button {
@@ -169,12 +208,24 @@
       }
 
       @media (max-width: 600px) {
+        #game-box {
+          width: 90vw;
+          height: 90vw;
+          max-width: 500px;
+          max-height: 500px;
+        }
+
+        #ui-panel {
+          top: 15px;
+          right: 15px;
+        }
+
         #reaction-time {
-          font-size: 42px;
+          font-size: 36px;
         }
 
         #status {
-          font-size: 22px;
+          font-size: 20px;
         }
 
         button {
@@ -186,11 +237,18 @@
           padding: 30px 25px;
           margin: 20px;
         }
+
+        #instructions-text {
+          font-size: 13px;
+          max-width: 300px;
+        }
       }
     </style>
   </head>
   <body>
-    <div id="canvas-container"></div>
+    <div id="canvas-container">
+      <div id="game-box"></div>
+    </div>
 
     <div id="overlay">
       <div id="instructions">
@@ -225,8 +283,14 @@
       </div>
 
       <div id="controls">
-        <button id="start-btn">Start</button>
-        <button id="reset-btn">Reset Stats</button>
+        <div id="instructions-text">
+          Click START and wait for the shape to turn <strong>GREEN</strong>,
+          then click as fast as you can!
+        </div>
+        <div id="button-row">
+          <button id="start-btn">Start</button>
+          <button id="reset-btn">Reset Stats</button>
+        </div>
       </div>
     </div>
 
@@ -241,20 +305,16 @@
       let totalTime = 0;
 
       // Three.js setup
-      const container = document.getElementById('canvas-container');
+      const container = document.getElementById('game-box');
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
+      const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
       const renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
       });
 
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      const boxSize = Math.min(window.innerWidth * 0.9, 600);
+      renderer.setSize(boxSize, boxSize);
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
 
@@ -266,40 +326,20 @@
       pointLight.position.set(10, 10, 10);
       scene.add(pointLight);
 
-      // Create sphere
-      const geometry = new THREE.SphereGeometry(1.5, 32, 32);
+      // Create interesting shape - octahedron with subdivision
+      const geometry = new THREE.OctahedronGeometry(1.8, 1);
       const material = new THREE.MeshPhongMaterial({
         color: 0x667eea,
         emissive: 0x667eea,
         emissiveIntensity: 0.3,
         shininess: 100,
+        specular: 0x888888,
+        flatShading: false,
       });
-      const sphere = new THREE.Mesh(geometry, material);
-      scene.add(sphere);
+      const shape = new THREE.Mesh(geometry, material);
+      scene.add(shape);
 
       camera.position.z = 5;
-
-      // Particle system for visual effect
-      const particlesGeometry = new THREE.BufferGeometry();
-      const particleCount = 100;
-      const positions = new Float32Array(particleCount * 3);
-
-      for (let i = 0; i < particleCount * 3; i++) {
-        positions[i] = (Math.random() - 0.5) * 10;
-      }
-
-      particlesGeometry.setAttribute(
-        'position',
-        new THREE.BufferAttribute(positions, 3)
-      );
-      const particlesMaterial = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.05,
-        transparent: true,
-        opacity: 0.6,
-      });
-      const particles = new THREE.Points(particlesGeometry, particlesMaterial);
-      scene.add(particles);
 
       // DOM elements
       const startBtn = document.getElementById('start-btn');
@@ -316,12 +356,9 @@
       function animate() {
         requestAnimationFrame(animate);
 
-        // Rotate sphere
-        sphere.rotation.x += 0.005;
-        sphere.rotation.y += 0.01;
-
-        // Rotate particles slowly
-        particles.rotation.y += 0.001;
+        // Rotate shape
+        shape.rotation.x += 0.01;
+        shape.rotation.y += 0.015;
 
         renderer.render(scene, camera);
       }
@@ -343,11 +380,11 @@
           uiPanel.classList.remove('hidden');
         }
 
-        // Reset sphere color
-        sphere.material.color.setHex(0x667eea);
-        sphere.material.emissive.setHex(0x667eea);
-        sphere.material.emissiveIntensity = 0.3;
-        sphere.scale.set(1, 1, 1);
+        // Reset shape color
+        shape.material.color.setHex(0x667eea);
+        shape.material.emissive.setHex(0x667eea);
+        shape.material.emissiveIntensity = 0.3;
+        shape.scale.set(1, 1, 1);
 
         // Random delay between 2-5 seconds
         const delay = 2000 + Math.random() * 3000;
@@ -358,12 +395,12 @@
             startTime = performance.now();
 
             // Change to green
-            sphere.material.color.setHex(0x00ff88);
-            sphere.material.emissive.setHex(0x00ff88);
-            sphere.material.emissiveIntensity = 0.8;
+            shape.material.color.setHex(0x00ff88);
+            shape.material.emissive.setHex(0x00ff88);
+            shape.material.emissiveIntensity = 0.8;
 
             // Pulse effect
-            sphere.scale.set(1.2, 1.2, 1.2);
+            shape.scale.set(1.15, 1.15, 1.15);
 
             statusEl.textContent = 'CLICK NOW!';
           }
@@ -381,9 +418,9 @@
           reactionTimeEl.textContent = '❌';
           reactionTimeEl.style.color = '#ff6b6b';
 
-          sphere.material.color.setHex(0xff6b6b);
-          sphere.material.emissive.setHex(0xff6b6b);
-          sphere.material.emissiveIntensity = 0.5;
+          shape.material.color.setHex(0xff6b6b);
+          shape.material.emissive.setHex(0xff6b6b);
+          shape.material.emissiveIntensity = 0.5;
 
           startBtn.disabled = false;
         } else if (state === 'ready') {
@@ -409,9 +446,9 @@
           averageEl.textContent = `${Math.round(totalTime / attempts)}ms`;
 
           // Celebrate animation
-          sphere.scale.set(1.4, 1.4, 1.4);
+          shape.scale.set(1.3, 1.3, 1.3);
           setTimeout(() => {
-            sphere.scale.set(1, 1, 1);
+            shape.scale.set(1, 1, 1);
           }, 200);
 
           startBtn.disabled = false;
@@ -437,18 +474,17 @@
       startBtn.addEventListener('click', startGame);
       resetBtn.addEventListener('click', resetStats);
 
-      // Click/touch anywhere on canvas
-      renderer.domElement.addEventListener('click', handleReaction);
-      renderer.domElement.addEventListener('touchstart', (e) => {
+      // Click/touch on game box only
+      container.addEventListener('click', handleReaction);
+      container.addEventListener('touchstart', (e) => {
         e.preventDefault();
         handleReaction();
       });
 
       // Handle resize
       window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        const newBoxSize = Math.min(window.innerWidth * 0.9, 600);
+        renderer.setSize(newBoxSize, newBoxSize);
       });
     </script>
   </body>
